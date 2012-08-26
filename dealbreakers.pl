@@ -12,7 +12,6 @@ use strict;
 use XML::Simple;
 use LWP::Simple; 
 
-
 ########### SET THESE VARIABLES ######################
 
 # Url to fetch deals from
@@ -29,15 +28,46 @@ my $output_path 	= "results.txt";
 
 ###################################################W###
 
-my @deals = ();
-my $report = "";
+my @deals 		= ();
+my $x 			= 0;
+my $req 		= 0;
+my $requestsize = 500;
+my $requests 	= 3;
+my $report		= "";
 
-# Retrieve the xml list of deals
 my $dealbrowser = LWP::UserAgent->new();
-my $request = HTTP::Request->new('GET', $url . '.xml');
-$request->authorization_basic($api_token, 'x');
+my $request 	= "";
 
-writeFileText('deals.xml', $dealbrowser->request($request)->content );
+for ($x=0; $x<$requests; $x++) {
+	# Retrieve the xml list of deals
+	$req = $x * $requestsize;
+	$request = HTTP::Request->new('GET', $url . '.xml?n=' . $req);
+	$request->authorization_basic($api_token, 'x');
+	writeFileText( ('deals-' . $x . '.xml') , $dealbrowser->request($request)->content );
+}
+
+# Join this lists together
+opendir(DIRECTORY, '.')
+	or die "Can't open current directory.";
+print join(', ', readdir(DIRECTORY));
+closedir DIRECTORY;
+
+my $dealtext = "";
+
+# Find the files we just saved and group them into one file
+for($x=0; $x<$requests; $x++) {
+	my $d = getFileText('deals-' . $x . '.xml');
+	if ($d =~ /(<\?xml version="1\.0" encoding="UTF-8"\?>)\n(<deals type="array">)(.*)(<\/deals>)/igcs) {
+		$d = $3;
+	}
+	
+	$dealtext .= $d;
+}
+
+$dealtext = 	'<?xml version="1.0" encoding="UTF-8"?>
+				 <deals type="array">' . "$dealtext" . '</deals>';
+
+writeFileText('deals.xml', $dealtext);
 
 # Get list of deals
 my $file = 'deals.xml';
@@ -50,13 +80,15 @@ foreach my $key (keys (%{$doc->{deal}})) {
 	# Temporary deal hash
 	my %d = ();  
 	
-	my $id 		= $doc->{deal}->{$key}->{'id'}->{'content'};
-	my $name 	= $key;
-	$d{$id} 	= $name;
+	my $id 				= $doc->{deal}->{$key}->{'id'}->{'content'};
+	my $name 			= $key;
+	$d{'id'} 			= $id;
+	$d{'status'}		= $doc->{deal}->{$key}->{'status'};
 
 	# Put the deal in an array
 	push(@deals, \%d);
 }
+
 
 # An array of broken deals
 my @taskless_deals = ();
