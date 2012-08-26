@@ -32,18 +32,32 @@ my @deals 		= ();
 my $x 			= 0;
 my $req 		= 0;
 my $requestsize = 500;
-my $requests 	= 3;
+my $requests 	= 5;
 my $report		= "";
 
 my $dealbrowser = LWP::UserAgent->new();
 my $request 	= "";
 
-for ($x=0; $x<$requests; $x++) {
+my $test = "";
+my $dealxml = "";
+my $done = 0;
+
+while($done == 0) {
 	# Retrieve the xml list of deals
 	$req = $x * $requestsize;
 	$request = HTTP::Request->new('GET', $url . '.xml?n=' . $req);
 	$request->authorization_basic($api_token, 'x');
-	writeFileText( ('deals-' . $x . '.xml') , $dealbrowser->request($request)->content );
+
+	$dealxml = $dealbrowser->request($request)->content;
+	
+	if (length($dealxml) < 100) {
+		$done = 1;
+	}
+	else {
+		writeFileText( ('deals-' . $x . '.xml') , $dealxml );
+	}
+	
+	$x++;
 }
 
 # Join this lists together
@@ -57,11 +71,13 @@ my $dealtext = "";
 # Find the files we just saved and group them into one file
 for($x=0; $x<$requests; $x++) {
 	my $d = getFileText('deals-' . $x . '.xml');
-	if ($d =~ /(<\?xml version="1\.0" encoding="UTF-8"\?>)\n(<deals type="array">)(.*)(<\/deals>)/igcs) {
-		$d = $3;
+	if (length($d) > 100) {
+		if ($d =~ /(<\?xml version="1\.0" encoding="UTF-8"\?>)\n(<deals type="array">)(.*)(<\/deals>)/igcs) {
+			$d = $3;
+		}
+		
+		$dealtext .= $d;
 	}
-	
-	$dealtext .= $d;
 }
 
 $dealtext = 	'<?xml version="1.0" encoding="UTF-8"?>
